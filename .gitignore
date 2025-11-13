@@ -1,0 +1,63 @@
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Next.js / Node / Frontend ---
+frontend/.next/
+frontend/out/
+frontend/dist/
+frontend/node_modules/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+frontend/.turbo/
+frontend/*.tsbuildinfo
+
+# --- Backend / FastAPI / Python ---
+backend/venv/
+backend/.venv/
+backend/__pycache__/
+backend/*.pyc
+backend/*.pyo
+backend/*.pyd
+backend/.env
+backend/.env.local
+backend/*.db
+
+# --- Database (PostGIS) ---
+db/data/
+db/*.sql
+db/*.dump
+db/*.backup
+
+# --- Datasets ---
+data/
+datasets/
+*.geojson
+*.geotiff
+*.osm
+*.shp
+*.shx
+*.dbf
+*.prj
+*.zip
+
+# --- Secrets ---
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# --- Editors ---
+.vscode/
+.idea/
+.history/
+
+# --- Mac / Windows junk ---
+.DS_Store
+Thumbs.db
