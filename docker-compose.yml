@@ -1,7 +1,9 @@
 version: "3.9"
+
 services:
+  # --- Database Service (PostGIS + pgRouting) ---
   db:
-    image: postgis/postgis:15-3.3
+    image: pgrouting/pgrouting:15-3.5-3.6
     container_name: takewalk_db
     restart: always
     environment:
@@ -11,4 +13,38 @@ services:
     ports:
       - "5432:5432"
     volumes:
+      # Maps the database data to a local folder so it survives restarts
       - ./db/data:/var/lib/postgresql/data
+      # Maps your raw datasets folder so you can import .pbf files if needed
+      - ./data:/data
+
+  # --- Backend Service (FastAPI) ---
+  backend:
+    build: ./backend
+    container_name: takewalk_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      # Connects using the internal container name 'takewalk_db' and your password
+      - DATABASE_URL=postgresql://postgres:uomdiss1131@takewalk_db:5432/takewalk
+    depends_on:
+      - db
+    volumes:
+      # Syncs your code live so you don't have to rebuild Docker for every python change
+      - ./backend:/app
+
+ # --- Frontend Service (Next.js) ---
+  frontend:
+    build: ./frontend
+    container_name: takewalk_frontend
+    ports:
+      - "3000:3000"
+    # This environment variable tells the browser where to find the API
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules

@@ -40,6 +40,7 @@ datasets/
 *.geojson
 *.geotiff
 *.osm
+*.pbf
 *.shp
 *.shx
 *.dbf
