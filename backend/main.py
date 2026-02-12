@@ -48,7 +48,7 @@ def read_root():
 async def get_route(request: RouteRequest):
     try:
         async with app.state.pool.acquire() as conn:
-            # 1. SNAP: Find nearest nodes (Ensure we use integers)
+            # 1. SNAP
             snap_query = """
                 SELECT id FROM walkable_ways_noded_vertices_pgr 
                 ORDER BY the_geom <-> ST_Transform(ST_SetSRID(ST_Point($1, $2), 4326), 3857)
@@ -59,45 +59,57 @@ async def get_route(request: RouteRequest):
 
             if start_node is None or end_node is None:
                 raise HTTPException(status_code=404, detail="Could not snap to walkable network.")
-
             if start_node == end_node:
-                return {"type": "FeatureCollection", "features": []}
+                return {"type": "FeatureCollection", "features": [], "metadata": {"distance_m": 0, "duration_min": 0}}
 
-            logger.info(f"Routing: {start_node} -> {end_node}")
-
-            # 2. ROUTE: Optimized Dijkstra
-            # We use f-strings for IDs here to avoid the asyncpg type-inference error ($1 expected str)
-            # because start_node/end_node are already validated integers from the DB.
+            # 2. ROUTE + STATS (Combined Query)
+            # We calculate ST_Length in 3857 (meters) for accuracy.
             pgr_query = f"""
-                SELECT ST_AsGeoJSON(ST_Transform(ST_LineMerge(ST_Collect(b.geom ORDER BY a.seq)), 4326)) 
-                FROM pgr_dijkstra(
-                    'SELECT id, source, target, ST_Length(geom) as cost, ST_Length(geom) as reverse_cost 
-                    FROM walkable_ways_noded 
-                    WHERE geom && ST_Expand(ST_Envelope(ST_Collect(
-                        (SELECT the_geom FROM walkable_ways_noded_vertices_pgr WHERE id = {start_node}),
-                        (SELECT the_geom FROM walkable_ways_noded_vertices_pgr WHERE id = {end_node})
-                    )), 20000)',
-                    {start_node}, 
-                    {end_node}, 
-                    false 
-                ) a
-                JOIN walkable_ways_noded b ON a.edge = b.id;
+                WITH route_geom AS (
+                    SELECT ST_LineMerge(ST_Collect(b.geom ORDER BY a.seq)) as geom
+                    FROM pgr_dijkstra(
+                        'SELECT id, source, target, ST_Length(geom) as cost, ST_Length(geom) as reverse_cost 
+                         FROM walkable_ways_noded 
+                         WHERE geom && ST_Expand(ST_Envelope(ST_Collect(
+                            (SELECT the_geom FROM walkable_ways_noded_vertices_pgr WHERE id = {start_node}),
+                            (SELECT the_geom FROM walkable_ways_noded_vertices_pgr WHERE id = {end_node})
+                         )), 20000)',
+                        {start_node}, 
+                        {end_node}, 
+                        false 
+                    ) a
+                    JOIN walkable_ways_noded b ON a.edge = b.id
+                )
+                SELECT 
+                    ST_AsGeoJSON(ST_Transform(geom, 4326)) as geojson,
+                    ST_Length(geom) as length_meters
+                FROM route_geom;
             """
             
-            geojson_str = await conn.fetchval(pgr_query)
+            row = await conn.fetchrow(pgr_query)
             
-            if not geojson_str:
-                raise HTTPException(status_code=404, detail="No route found between these points.")
+            if not row or not row['geojson']:
+                raise HTTPException(status_code=404, detail="No route found.")
+
+            # Based on the paper: 200m takes ~2.5 mins [cite: 98]
+            # Speed = 200m / 150s = 1.33 m/s (~4.8 km/h)
+            # Currently, flat speed assumption for walking.
+            distance_m = row['length_meters']
+            duration_min = (distance_m / 1.33) / 60
 
             return {
                 "type": "FeatureCollection",
                 "features": [
                     {
                         "type": "Feature",
-                        "geometry": json.loads(geojson_str),
+                        "geometry": json.loads(row['geojson']),
                         "properties": {"name": "Walking Route"}
                     }
-                ]
+                ],
+                "metadata": {
+                    "distance_m": round(distance_m, 1),
+                    "duration_min": round(duration_min, 1)
+                }
             }
     except Exception as e:
         logger.error(f"Backend Error: {str(e)}")

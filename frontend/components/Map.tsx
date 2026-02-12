@@ -7,6 +7,10 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 type RouteData = {
   type: "FeatureCollection";
   features: Array<any>;
+  metadata?: {
+    distance_m: number;
+    duration_min: number;
+  };
 };
 
 export default function MapComponent() {
@@ -111,6 +115,25 @@ export default function MapComponent() {
             {loading ? "Calculating..." : "Find Route"}
           </button>
         </form>
+        {/* --- INSERT LIVE STATS DASHBOARD HERE --- */}
+        {routeData?.metadata && (
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-xs text-gray-500 uppercase font-bold">Distance</p>
+                <p className="text-lg font-semibold text-blue-600">
+                  {(routeData.metadata.distance_m / 1000).toFixed(2)} km
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-gray-500 uppercase font-bold">Est. Time</p>
+                <p className="text-lg font-semibold text-blue-600">
+                  {Math.round(routeData.metadata.duration_min)} mins
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* MAP */}
